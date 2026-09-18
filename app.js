@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeSYlm, glyphAngle } from './swsh.js';
+import { makeSYlm, glyphAngle } from './swsh.js?v=2026-09-18d';   // version tag defeats the 10-min Pages cache
 
 const LMAX = 5;
 const $ = (id) => document.getElementById(id);
@@ -315,6 +315,7 @@ function syncButtons() {
   for (const b of document.querySelectorAll('button[data-k="sign"]')) b.disabled = st.sabs === 0;
   for (const b of document.querySelectorAll('button[data-k="mirror"]')) b.disabled = !(st.sum && st.time);
   $('lsign').disabled = !st.sum; $('lsign').classList.toggle('on', !!st.lsign);
+  $('mirrorgrp').title = st.sum ? '' : 'active only in "m + (−m)" mode';
   for (const id of ['gdens', 'gsize']) $(id).style.opacity = st.sabs === 0 ? 0.35 : 1;
   $('play').disabled = !st.time; $('phase').disabled = !st.time;
   $('play').textContent = st.playing ? '⏸ pause' : '▶ play';
