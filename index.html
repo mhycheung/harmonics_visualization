@@ -23,8 +23,11 @@
   input[type=range] { width: 110px; vertical-align: middle; }
   #legend { display:flex; align-items:center; gap:6px; color:var(--dim); font-size:12px; }
   #legend canvas { width:140px; height:12px; border:1px solid #333; }
-  main { position: relative; z-index: 0; padding: 10px 14px 30px; }
-  #grid { display:grid; gap: 4px; justify-content: center; }
+  html, body { height: 100%; overflow: hidden; }
+  body { display:flex; flex-direction:column; }
+  #viewport { position: relative; flex: 1; overflow: hidden; z-index: 0; touch-action: none; cursor: move; }
+  #grid { position:absolute; left:0; top:0; display:grid; gap: 4px; padding: 10px 14px;
+          transform-origin: 0 0; }
   .cell { position:relative; }
   .view { width:100%; aspect-ratio: 1; touch-action:none; cursor:grab; border-radius: 6px;
           background: radial-gradient(circle, #181c26 0%, #11141b 70%); }
@@ -34,10 +37,14 @@
   .rowlab, .collab { color: var(--dim); font-size:12px; display:flex; align-items:center;
                      justify-content:center; }
   #gl { position: fixed; inset: 0; width:100vw; height:100vh; pointer-events:none; z-index: 1; }
-  details { max-width: 900px; margin: 18px auto 0; color: var(--dim); position: relative; z-index: 2;
-            background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; }
-  details summary { cursor: pointer; color: var(--fg); }
-  details code { color: #e6c07b; }
+  #conv { display:none; position: fixed; z-index: 5; left: 50%; top: 50%; transform: translate(-50%,-50%);
+          width: min(900px, 92vw); max-height: 80vh; overflow:auto; color: var(--dim);
+          background: var(--panel); border: 1px solid #3a4152; border-radius: 8px; padding: 10px 18px;
+          box-shadow: 0 10px 40px #000a; }
+  #conv.open { display:block; }
+  #conv code { color: #e6c07b; }
+  #conv .close { float:right; }
+  #hint { color: var(--dim); font-size: 12px; }
   #readout { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 9em; }
 </style>
 <script type="importmap">
@@ -46,7 +53,7 @@
 </head>
 <body>
 <header>
-  <h1>Spin-weighted spherical harmonics <span style="color:var(--dim);font-weight:400"><sub>s</sub>Y<sub>ℓm</sub>(θ, φ) — drag any sphere to rotate all</span></h1>
+  <h1>Spin-weighted spherical harmonics <span style="color:var(--dim);font-weight:400"><sub>s</sub>Y<sub>ℓm</sub>(θ, φ) — drag a sphere to rotate all · wheel to zoom · drag empty space (or shift/right-drag) to pan</span></h1>
   <div class="bar">
     <div class="grp"><span class="lab">spin sign</span>
       <button data-k="sign" data-v="-1">−</button><button data-k="sign" data-v="1">+</button></div>
@@ -67,15 +74,16 @@
     <div class="grp" id="gdens"><span class="lab">glyphs</span><input id="density" type="range" min="80" max="800" step="10" value="260"></div>
     <div class="grp" id="gsize"><span class="lab">glyph size</span><input id="gscale" type="range" min="0.3" max="2" step="0.05" value="1"></div>
     <div class="grp"><span class="lab">sphere size</span><input id="csize" type="range" min="60" max="260" step="5" value="120"></div>
-    <div class="grp"><button id="reset">reset view</button></div>
+    <div class="grp"><button id="reset">default orientation</button><button id="zlock">lock z vertical</button>
+      <button id="rezoom">reset zoom</button><button id="convbtn">conventions</button></div>
     <div id="legend"><span id="leglab"></span><span id="leg0"></span><canvas id="legc" width="140" height="12"></canvas><span id="leg1"></span></div>
   </div>
 </header>
 <canvas id="gl"></canvas>
-<main>
-  <div id="grid"></div>
-  <details>
-    <summary>Conventions</summary>
+<div id="viewport"><div id="grid"></div></div>
+<div id="conv">
+    <button class="close" id="convclose">close</button>
+    <h3 style="color:var(--fg);margin:6px 0">Conventions</h3>
     <p><b>Harmonics.</b> Goldberg et al., J. Math. Phys. 8, 2155 (1967), in the sign convention of
       LALSuite and the SXS catalog (Condon–Shortley phase included):<br>
       <code>ₛY<sub>ℓm</sub> = (−1)<sup>m</sup> √[(ℓ+m)!(ℓ−m)!(2ℓ+1) / (4π(ℓ+s)!(ℓ−s)!)]
@@ -96,11 +104,13 @@
       and spin −1 component v<sub>θ</sub> − i v<sub>φ</sub>. For s = −2, f = h<sub>+</sub> − i h<sub>×</sub>, and the segment lies
       along the stretch axis ψ = ½ atan2(h<sub>×</sub>, h<sub>+</sub>) of a transverse-traceless strain
       (h<sub>+</sub> stretches along e<sub>θ</sub>). The |s| = 2 segments have no head, because ψ and ψ + π are the same axis.</p>
+    <p><b>Navigation.</b> Drag a sphere to rotate every sphere. With “lock z vertical” on, +z points up the screen
+      and a drag only rotates the spheres about z. The scroll wheel zooms about the cursor. Drag empty space, or shift-drag or
+      right-drag anywhere, to pan.</p>
     <p><b>Animation.</b> ω is fixed. One period 2π/ω takes 1/speed × 4 s.
       For s = 0 in “m + (−m)” mode with e<sup>+iωt</sup> on the −m term, Re f = 0 for odd m. This is correct:
       in that case f is purely imaginary, because Y<sub>ℓ,−m</sub> = (−1)<sup>m</sup> conj(Y<sub>ℓm</sub>).</p>
-  </details>
-</main>
+</div>
 <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -46,13 +46,23 @@ const camera = new THREE.OrthographicCamera(-1.32, 1.32, 1.32, -1.32, 0.1, 10);
 camera.position.set(0, 0, 5);
 camera.lookAt(0, 0, 0);
 
-// World orientation shared by every sphere. Physics z is drawn up the screen,
-// tilted toward the viewer, and rotated so that phi = 0 is not face-on.
-function defaultOrientation() {
-  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2 + 0.38);
-  return q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.55));
+// World orientation shared by every sphere: Q = Rx(-pi/2 + TILT) Rz(azimuth).
+// Physics z is drawn up the screen, tilted TILT toward the viewer, and rotated so
+// that phi = 0 is not face-on.
+const TILT = 0.38, AZ0 = -0.55;
+function zUpOrientation(az) {
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2 + TILT);
+  return q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), az));
 }
+const defaultOrientation = () => zUpOrientation(AZ0);
 const Q = defaultOrientation();
+// Azimuth of the z-up orientation closest to Q: for Q = Rx(b) Rz(a), world x-components
+// of the physics x and y axes are cos(a) and -sin(a).
+function azimuthOf(q) {
+  const ex = new THREE.Vector3(1, 0, 0).applyQuaternion(q), ey = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+  return Math.atan2(-ey.x, ex.x);
+}
+let zlock = false, az = AZ0;
 
 // ---------------------------------------------------------- sphere geometry
 // Built once; physics coordinates (poles on z).
@@ -230,30 +240,70 @@ function rebuild() {
       cells.push(buildCell(l, m, el.querySelector('.view')));
     }
   }
-  for (const c of cells) c.el.addEventListener('pointerdown', startDrag);
   refreshLegend();
   dirty = true;
 }
 
 // ------------------------------------------------------------------ drag
+// Dragging a sphere rotates every sphere; dragging empty space (or shift/right-drag
+// anywhere) pans the zoomed grid.
 let drag = null;
+const viewport = $('viewport');
+const view = { k: 1, tx: 0, ty: 0 };                       // grid transform: translate, then scale
+function applyView() {
+  grid.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.k})`;
+  dirty = true;
+}
+function fitView() {
+  view.k = 1;
+  view.tx = Math.max(0, (viewport.clientWidth - grid.offsetWidth) / 2);
+  view.ty = 0;
+  applyView();
+}
 function startDrag(e) {
-  drag = { x: e.clientX, y: e.clientY, el: e.currentTarget };
+  const pan = e.shiftKey || e.button === 2 || !e.target.closest('.view');
+  drag = { x: e.clientX, y: e.clientY, pan, el: pan ? viewport : e.target.closest('.view') };
   drag.el.classList.add('dragging');
   e.preventDefault();
 }
+viewport.addEventListener('pointerdown', startDrag);
+viewport.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('pointermove', (e) => {
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   drag.x = e.clientX; drag.y = e.clientY;
-  const k = 3.2 / Math.max(80, drag.el.clientWidth);
-  const qy = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx * k);
-  const qx = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dy * k);
-  Q.premultiply(qy).premultiply(qx);
+  if (drag.pan) { view.tx += dx; view.ty += dy; applyView(); return; }
+  const k = 3.2 / Math.max(80, drag.el.getBoundingClientRect().width);
+  if (zlock) {
+    az += dx * k;
+    Q.copy(zUpOrientation(az));
+  } else {
+    const qy = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx * k);
+    const qx = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dy * k);
+    Q.premultiply(qy).premultiply(qx);
+  }
   dirty = true;
 });
 window.addEventListener('pointerup', () => { if (drag) drag.el.classList.remove('dragging'); drag = null; });
-$('reset').onclick = () => { Q.copy(defaultOrientation()); dirty = true; };
+viewport.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const r = viewport.getBoundingClientRect(), cx = e.clientX - r.left, cy = e.clientY - r.top;
+  const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  const k1 = Math.min(10, Math.max(0.25, view.k * Math.exp(-dy * 0.0015)));
+  const f = k1 / view.k;
+  view.tx = cx - (cx - view.tx) * f; view.ty = cy - (cy - view.ty) * f; view.k = k1;
+  applyView();
+}, { passive: false });
+$('reset').onclick = () => { az = AZ0; Q.copy(defaultOrientation()); dirty = true; };
+$('rezoom').onclick = fitView;
+$('zlock').onclick = () => {
+  zlock = !zlock;
+  if (zlock) { az = azimuthOf(Q); Q.copy(zUpOrientation(az)); }
+  $('zlock').classList.toggle('on', zlock);
+  dirty = true;
+};
+$('convbtn').onclick = () => $('conv').classList.toggle('open');
+$('convclose').onclick = () => $('conv').classList.remove('open');
 
 // -------------------------------------------------------------- controls
 function syncButtons() {
@@ -281,7 +331,7 @@ $('speed').oninput = (e) => { st.speed = +e.target.value; };
 $('phase').oninput = (e) => { st.wt = +e.target.value; st.playing = false; syncButtons(); dirty = true; };
 $('density').onchange = (e) => { st.density = +e.target.value; if (spin()) { cells.forEach((c) => { buildGlyphs(c); updateNorm(c); }); dirty = true; } };
 $('gscale').oninput = (e) => { st.gscale = +e.target.value; dirty = true; };
-$('csize').onchange = () => rebuild();
+$('csize').onchange = () => { rebuild(); fitView(); };
 window.addEventListener('resize', () => { dirty = true; });
 window.addEventListener('scroll', () => { dirty = true; }, { passive: true });
 
@@ -319,7 +369,7 @@ function render() {
   const pa = [Math.cos(wt), -Math.sin(wt)];                       // e^{-i w t}
   const pb = st.sum && st.time && st.mirror ? [Math.cos(wt), Math.sin(wt)] : pa;
   $('readout').textContent = st.time ? `ωt = ${(wt / Math.PI).toFixed(2)} π` : 'static';
-  const top = document.querySelector('header').getBoundingClientRect().bottom;
+  const top = viewport.getBoundingClientRect().top;
   for (const c of cells) {
     const r = c.el.getBoundingClientRect();
     if (r.bottom < top || r.top > H || r.right < 0 || r.left > W) continue;
@@ -327,7 +377,7 @@ function render() {
     const u = c.mesh.material.uniforms;
     u.uPA.value.set(pa[0], pa[1]); u.uPB.value.set(pb[0], pb[1]);
     if (c.glyph) updateGlyphs(c, pa, pb);
-    // clip at the sticky header so spheres scroll under it
+    // clip at the top of the viewport so spheres pan under the header
     const y0 = Math.max(r.top, top);
     if (r.bottom <= y0) continue;
     renderer.setViewport(r.left, H - r.bottom, r.width, r.height);
@@ -340,5 +390,6 @@ function render() {
 $('csize').value = Math.max(60, Math.min(160, Math.floor((window.innerWidth - 110) / 11.3)));
 syncButtons();
 rebuild();
-window.__swsh = { st, cells: () => cells, spin };                // for the headless checks
+fitView();
+window.__swsh = { st, cells: () => cells, spin, view, Q };                // for the headless checks
 requestAnimationFrame(frame);
