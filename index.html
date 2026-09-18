@@ -64,7 +64,8 @@
     <div class="grp"><span class="lab">m</span>
       <button data-k="sum" data-v="0">m, −m separate</button><button data-k="sum" data-v="1">m + (−m)</button></div>
     <div class="grp" id="mirrorgrp"><span class="lab">−m term ×</span>
-      <button data-k="mirror" data-v="0">T</button><button data-k="mirror" data-v="1">T*</button><button data-k="mirror" data-v="2" title="nonprecessing BBH: h_{l,-m} = (-1)^l h*_{lm}">(−1)<sup>ℓ</sup> T* (BBH)</button></div>
+      <button data-k="mirror" data-v="0">e<sup>−iωt</sup></button><button data-k="mirror" data-v="1">e<sup>+iωt</sup></button>
+      <button id="lsign" title="nonprecessing BBH: h_{l,-m} = (-1)^l h*_{lm}">(−1)<sup>ℓ</sup></button></div>
   </div>
   <div class="bar" style="margin-top:6px">
     <div class="grp"><button id="play">⏸ pause</button></div>
@@ -95,9 +96,9 @@
       (the short dim stub) toward +y.</p>
     <p><b>Displayed field.</b> In each cell, f = ₛY<sub>ℓm</sub> · T(t), or f = ₛY<sub>ℓm</sub> · T(t) + ₛY<sub>ℓ,−m</sub> · T′(t) in the
       “m + (−m)” mode (column m ≥ 0; the m = 0 column shows ₛY<sub>ℓ0</sub> alone).
-      T = 1 (constant) or e<sup>−iωt</sup>. The “−m term ×” buttons set T′ = T, T′ = T* = e<sup>+iωt</sup>, or
-      T′ = (−1)<sup>ℓ</sup> T* (the default).
-      The last option is the mode symmetry of a nonprecessing binary, h<sub>ℓ,−m</sub> = (−1)<sup>ℓ</sup> h*<sub>ℓm</sub>
+      T = 1 (constant) or e<sup>−iωt</sup>. The “−m term ×” buttons set the time factor of the −m term to
+      e<sup>−iωt</sup> or e<sup>+iωt</sup> (default). The “(−1)<sup>ℓ</sup>” toggle (on by default) multiplies the −m term by (−1)<sup>ℓ</sup>.
+      With both defaults, T′ = (−1)<sup>ℓ</sup> e<sup>+iωt</sup>. This is the mode symmetry of a nonprecessing binary, h<sub>ℓ,−m</sub> = (−1)<sup>ℓ</sup> h*<sub>ℓm</sub>
       (reflection through the orbital plane), with h<sub>ℓm</sub> = e<sup>−iωt</sup>. For s = −2 the sum is then the strain
       h = h<sub>+</sub> − i h<sub>×</sub> of that (ℓ, ±m) pair. For example, ℓ = 2, m = ±2 gives circular polarization on the z axis
       and linear “+” polarization (h<sub>×</sub> = 0) on the equator. The code checks h<sub>×</sub> = 0 on the equator
@@ -114,7 +115,7 @@
       and a drag only rotates the spheres about z. The scroll wheel zooms about the cursor. Drag empty space, or shift-drag or
       right-drag anywhere, to pan.</p>
     <p><b>Animation.</b> ω is fixed. One period 2π/ω takes 1/speed × 4 s.
-      For s = 0 in “m + (−m)” mode with T′ = T*, Re f = 0 for odd m. This is correct:
+      For s = 0 in “m + (−m)” mode with T′ = e<sup>+iωt</sup> and (−1)<sup>ℓ</sup> off, Re f = 0 for odd m. This is correct:
       in that case f is purely imaginary, because Y<sub>ℓ,−m</sub> = (−1)<sup>m</sup> conj(Y<sub>ℓm</sub>).</p>
 </div>
 <script type="module" src="app.js"></script>

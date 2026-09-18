@@ -5,7 +5,7 @@ const LMAX = 5;
 const $ = (id) => document.getElementById(id);
 
 // ------------------------------------------------------------------ state
-const st = { sign: -1, sabs: 2, time: 1, sum: 0, mirror: 2, playing: true,
+const st = { sign: -1, sabs: 2, time: 1, sum: 0, mirror: 1, lsign: 1, playing: true,
              speed: 0.5, wt: 0, density: 260, gscale: 1 };
 const spin = () => (st.sabs === 0 ? 0 : st.sign * st.sabs);
 let dirty = true;
@@ -134,8 +134,9 @@ function buildCell(l, m, el) {
   const s = spin();
   const fA = makeSYlm(s, l, m);
   const fB0 = (st.sum && m !== 0) ? makeSYlm(s, l, -m) : null;
-  // mirror = 2: -m term carries (-1)^l, the nonprecessing-BBH symmetry h_{l,-m} = (-1)^l h*_{lm}
-  const bs = (st.mirror === 2 && l % 2) ? -1 : 1;
+  // lsign: -m term carries (-1)^l; with mirror (e^{+iwt}) this is the nonprecessing-BBH
+  // symmetry h_{l,-m} = (-1)^l h*_{lm}
+  const bs = (st.lsign && l % 2) ? -1 : 1;
   const fB = fB0 && ((t, p) => { const v = fB0(t, p); return [bs * v[0], bs * v[1]]; });
   const A = new Float32Array(2 * NV), B = new Float32Array(2 * NV);
   for (let i = 0; i < NV; i++) {
@@ -177,7 +178,7 @@ function buildGlyphs(cell) {
 
 // Normalization: max |f| over the sphere and over one period.
 function updateNorm(cell) {
-  const mirror = st.sum && st.time && st.mirror >= 1;
+  const mirror = st.sum && st.time && st.mirror;
   let mx = 0;
   const upd = (ar, ai, br, bi) => {
     const v = mirror ? Math.hypot(ar, ai) + Math.hypot(br, bi) : Math.hypot(ar + br, ai + bi);
@@ -312,7 +313,8 @@ $('convclose').onclick = () => $('conv').classList.remove('open');
 function syncButtons() {
   for (const b of document.querySelectorAll('button[data-k]')) b.classList.toggle('on', st[b.dataset.k] === +b.dataset.v);
   for (const b of document.querySelectorAll('button[data-k="sign"]')) b.disabled = st.sabs === 0;
-  for (const b of document.querySelectorAll('button[data-k="mirror"]')) b.disabled = !st.sum;
+  for (const b of document.querySelectorAll('button[data-k="mirror"]')) b.disabled = !(st.sum && st.time);
+  $('lsign').disabled = !st.sum; $('lsign').classList.toggle('on', !!st.lsign);
   for (const id of ['gdens', 'gsize']) $(id).style.opacity = st.sabs === 0 ? 0.35 : 1;
   $('play').disabled = !st.time; $('phase').disabled = !st.time;
   $('play').textContent = st.playing ? '⏸ pause' : '▶ play';
@@ -323,12 +325,13 @@ for (const b of document.querySelectorAll('button[data-k]')) {
     if (st[k] === v) return;
     st[k] = v;
     syncButtons();
-    if (k === 'mirror') rebuild();
+    if (k === 'mirror') cells.forEach(updateNorm);
     else if (k === 'time') { cells.forEach(updateNorm); refreshLegend(); }
     else rebuild();
     dirty = true;
   };
 }
+$('lsign').onclick = () => { st.lsign = 1 - st.lsign; syncButtons(); rebuild(); };
 $('play').onclick = () => { st.playing = !st.playing; syncButtons(); };
 $('speed').oninput = (e) => { st.speed = +e.target.value; };
 $('phase').oninput = (e) => { st.wt = +e.target.value; st.playing = false; syncButtons(); dirty = true; };
@@ -370,7 +373,7 @@ function render() {
   renderer.setScissor(0, 0, W, H); renderer.clear();
   const wt = st.time ? st.wt : 0;
   const pa = [Math.cos(wt), -Math.sin(wt)];                       // e^{-i w t}
-  const pb = st.sum && st.time && st.mirror >= 1 ? [Math.cos(wt), Math.sin(wt)] : pa;
+  const pb = st.sum && st.time && st.mirror ? [Math.cos(wt), Math.sin(wt)] : pa;
   $('readout').textContent = st.time ? `ωt = ${(wt / Math.PI).toFixed(2)} π` : 'static';
   const top = viewport.getBoundingClientRect().top;
   for (const c of cells) {
