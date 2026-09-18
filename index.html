@@ -45,6 +45,11 @@
   #conv code { color: #e6c07b; }
   #conv .close { float:right; }
   #hint { color: var(--dim); font-size: 12px; }
+  .tabs { display:inline-flex; gap:4px; margin-right:10px; }
+  .tabs button { font-size:14px; }
+  .cell .zero { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+                color: var(--dim); font-size:12px; text-align:center; pointer-events:none; z-index: 2; }
+  .ptab { display:none; } body.parity .ptab { display:block; } body.parity .stab { display:none; }
   #readout { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 9em; }
 </style>
 <script type="importmap">
@@ -53,11 +58,14 @@
 </head>
 <body>
 <header>
-  <h1>Spin-weighted spherical harmonics <span style="color:var(--dim);font-weight:400"><sub>s</sub>Y<sub>ℓm</sub>(θ, φ) — drag a sphere to rotate all · wheel to zoom · drag empty space (or shift/right-drag) to pan</span></h1>
+  <h1><span class="tabs"><button data-k="tab" data-v="0">spin-weighted <sub>s</sub>Y<sub>ℓm</sub></button><button data-k="tab" data-v="1">polar / axial (s = −2)</button></span>
+    <span id="subtitle" style="color:var(--dim);font-weight:400"></span></h1>
   <div class="bar">
-    <div class="grp"><span class="lab">spin sign</span>
+    <div class="grp" id="paritygrp"><span class="lab">parity</span>
+      <button data-k="parity" data-v="1">polar (even)</button><button data-k="parity" data-v="-1">axial (odd)</button><button data-k="parity" data-v="0">polar + axial</button></div>
+    <div class="grp" id="signgrp"><span class="lab">spin sign</span>
       <button data-k="sign" data-v="-1">−</button><button data-k="sign" data-v="1">+</button></div>
-    <div class="grp"><span class="lab">|s|</span>
+    <div class="grp" id="sabsgrp"><span class="lab">|s|</span>
       <button data-k="sabs" data-v="0">0</button><button data-k="sabs" data-v="1">1</button><button data-k="sabs" data-v="2">2</button></div>
     <div class="grp"><span class="lab">time</span>
       <button data-k="time" data-v="0">constant</button><button data-k="time" data-v="1">× e<sup>−iωt</sup></button></div>
@@ -92,9 +100,36 @@
       Example: <code>₋₂Y<sub>22</sub> = √(5/64π) (1+cos θ)² e<sup>2iφ</sup></code>.
       The code checks the closed forms, the identity <code>ₛY<sub>ℓ,−m</sub> = (−1)<sup>s+m</sup> conj(₋ₛY<sub>ℓm</sub>)</code>
       and orthonormality for all |s| ≤ 2, ℓ ≤ 5.</p>
+    <div class="ptab">
+    <p><b>Polar / axial tab.</b> Every cell shows a spin −2 strain h = h<sub>+</sub> − i h<sub>×</sub> (ℓ ≥ 2), drawn as in the
+      s = −2 case of the other tab: headless segments along the stretch axis, color = |h|.
+      A real transverse-traceless tensor on the sphere splits uniquely into two parts.
+      The <b>polar</b> (even-parity, “electric”) part is built from a real scalar S as
+      <code>E<sub>AB</sub> = (∇<sub>A</sub>∇<sub>B</sub> − ½ g<sub>AB</sub>∇²) S</code>.
+      The <b>axial</b> (odd-parity, “magnetic”) part is built from a real scalar S′ as the ε-dual
+      <code>B<sub>AB</sub> = ½(ε<sub>A</sub><sup>C</sup>E<sub>CB</sub> + ε<sub>B</sub><sup>C</sup>E<sub>CA</sub>)</code>,
+      with ε<sub>θ̂φ̂</sub> = +1 (right-handed about the outward normal). At each point B is E with the segment rotated by 45°.
+</p>
+    <p>In terms of h = Σ h<sub>ℓm</sub> ₋₂Y<sub>ℓm</sub>:
+      <code>h<sup>P</sup><sub>ℓm</sub> = ½[h<sub>ℓm</sub> + (−1)<sup>m</sup> h*<sub>ℓ,−m</sub>]</code>,
+      <code>h<sup>A</sup><sub>ℓm</sub> = ½[h<sub>ℓm</sub> − (−1)<sup>m</sup> h*<sub>ℓ,−m</sub>]</code>, and h = h<sup>P</sup> + h<sup>A</sup>.
+      Reality of the tensor forces h<sup>P</sup><sub>ℓ,−m</sub> = (−1)<sup>m</sup> h<sup>P</sup>*<sub>ℓm</sub> and
+      h<sup>A</sup><sub>ℓ,−m</sub> = −(−1)<sup>m</sup> h<sup>A</sup>*<sub>ℓm</sub>. So a polar or axial mode with
+      a given m always contains both ₋₂Y<sub>ℓm</sub> and ₋₂Y<sub>ℓ,−m</sub>.
+      Equivalently h<sup>P</sup> = (2/K) E[Re Φ] and h<sup>A</sup> = (2/K) B[Im Φ], where Φ = Σ h<sub>ℓm</sub> Y<sub>ℓm</sub> (scalar Y) and
+      K = √[(ℓ+2)!/(ℓ−2)!]. The code checks this by finite differences of the scalar Y<sub>ℓm</sub> for all ℓ ≤ 5, m.</p>
+    <p><b>Input.</b> The h<sub>ℓm</sub> are exactly those of the other tab at s = −2, with the same buttons:
+      “m, −m separate”: h<sub>ℓm</sub> = e<sup>−iωt</sup>, all other h<sub>ℓ′m′</sub> = 0. The cell then shows the polar or axial half
+      of ₋₂Y<sub>ℓm</sub> e<sup>−iωt</sup>; “polar + axial” gives back ₋₂Y<sub>ℓm</sub> e<sup>−iωt</sup>.
+      “m + (−m)”: h<sub>ℓm</sub> = e<sup>−iωt</sup> and h<sub>ℓ,−m</sub> = [(−1)<sup>ℓ</sup>] e<sup>±iωt</sup>, set by the “−m term ×” buttons and the
+      (−1)<sup>ℓ</sup> toggle (column m = 0 shows h<sub>ℓ0</sub> = e<sup>−iωt</sup> alone).
+      With the defaults (e<sup>+iωt</sup>, (−1)<sup>ℓ</sup> on) this is the equatorially symmetric (nonprecessing BBH) case. Then
+      the polar part vanishes for odd ℓ+m and the axial part vanishes for even ℓ+m. Such cells show “= 0”.
+      ω is an arbitrary real constant, not a QNM frequency.</p>
+    </div>
     <p><b>Axes.</b> θ is measured from the +z axis (the grey stub at the north pole). φ is measured from +x
       (the short dim stub) toward +y.</p>
-    <p><b>Displayed field.</b> In each cell, f = ₛY<sub>ℓm</sub> · T(t), or f = ₛY<sub>ℓm</sub> · T(t) + ₛY<sub>ℓ,−m</sub> · T′(t) in the
+    <p class="stab"><b>Displayed field.</b> In each cell, f = ₛY<sub>ℓm</sub> · T(t), or f = ₛY<sub>ℓm</sub> · T(t) + ₛY<sub>ℓ,−m</sub> · T′(t) in the
       “m + (−m)” mode (column m ≥ 0; the m = 0 column shows ₛY<sub>ℓ0</sub> alone).
       T = 1 (constant) or e<sup>−iωt</sup>. The “−m term ×” buttons set the time factor of the −m term to
       e<sup>−iωt</sup> or e<sup>+iωt</sup> (default). The “(−1)<sup>ℓ</sup>” toggle (on by default) multiplies the −m term by (−1)<sup>ℓ</sup>.
@@ -118,6 +153,6 @@
       For s = 0 in “m + (−m)” mode with T′ = e<sup>+iωt</sup> and (−1)<sup>ℓ</sup> off, Re f = 0 for odd m. This is correct:
       in that case f is purely imaginary, because Y<sub>ℓ,−m</sub> = (−1)<sup>m</sup> conj(Y<sub>ℓm</sub>).</p>
 </div>
-<script type="module" src="app.js?v=2026-09-18d"></script>
+<script type="module" src="app.js?v=2026-09-18e"></script>
 </body>
 </html>

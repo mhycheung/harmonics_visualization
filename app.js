@@ -1,13 +1,15 @@
 import * as THREE from 'three';
-import { makeSYlm, glyphAngle } from './swsh.js?v=2026-09-18d';   // version tag defeats the 10-min Pages cache
+import { makeSYlm, glyphAngle } from './swsh.js?v=2026-09-18e';
+import { parityCoeffs } from './parity.js?v=2026-09-18e';   // version tag defeats the 10-min Pages cache
 
 const LMAX = 5;
 const $ = (id) => document.getElementById(id);
 
 // ------------------------------------------------------------------ state
-const st = { sign: -1, sabs: 2, time: 1, sum: 0, mirror: 1, lsign: 1, playing: true,
+const st = { tab: 0, parity: 1, sign: -1, sabs: 2, time: 1, sum: 0, mirror: 1, lsign: 1, playing: true,
              speed: 0.5, wt: 0, density: 260, gscale: 1 };
-const spin = () => (st.sabs === 0 ? 0 : st.sign * st.sabs);
+const spin = () => (st.tab === 1 ? -2 : st.sabs === 0 ? 0 : st.sign * st.sabs);
+const sabs = () => Math.abs(spin());
 let dirty = true;
 
 // ---------------------------------------------------------------- colormaps
@@ -132,12 +134,24 @@ function disposeCells() {
 
 function buildCell(l, m, el) {
   const s = spin();
-  const fA = makeSYlm(s, l, m);
-  const fB0 = (st.sum && m !== 0) ? makeSYlm(s, l, -m) : null;
   // lsign: -m term carries (-1)^l; with mirror (e^{+iwt}) this is the nonprecessing-BBH
   // symmetry h_{l,-m} = (-1)^l h*_{lm}
   const bs = (st.lsign && l % 2) ? -1 : 1;
-  const fB = fB0 && ((t, p) => { const v = fB0(t, p); return [bs * v[0], bs * v[1]]; });
+  let fA, fB;
+  if (st.tab === 1) {
+    // polar/axial tab: f = A e^{-iwt} + B e^{+iwt}  (see parity.js)
+    const pair = st.sum && m !== 0;
+    const beta = pair && !(st.time && st.mirror) ? bs : 0, gamma = pair && st.time && st.mirror ? bs : 0;
+    const C = parityCoeffs(m, st.parity, beta, gamma);
+    const Y = makeSYlm(s, l, m), Ym = makeSYlm(s, l, -m);
+    const lin = (a, b) => (t, p) => { const u = Y(t, p), v = Ym(t, p);
+      return [a * u[0] + b * v[0], a * u[1] + b * v[1]]; };
+    fA = lin(C.m[0], C.mm[0]); fB = lin(C.m[1], C.mm[1]);
+  } else {
+    fA = makeSYlm(s, l, m);
+    const fB0 = (st.sum && m !== 0) ? makeSYlm(s, l, -m) : null;
+    fB = fB0 && ((t, p) => { const v = fB0(t, p); return [bs * v[0], bs * v[1]]; });
+  }
   const A = new Float32Array(2 * NV), B = new Float32Array(2 * NV);
   for (let i = 0; i < NV; i++) {
     const a = fA(SPH_TP[2*i], SPH_TP[2*i+1]); A[2*i] = a[0]; A[2*i+1] = a[1];
@@ -167,7 +181,7 @@ function buildGlyphs(cell) {
     const a = cell.fA(p.th, p.ph), b = cell.fB ? cell.fB(p.th, p.ph) : [0, 0];
     return { ...p, a, b };
   });
-  const vPer = st.sabs === 1 ? 9 : 6;                  // arrow: shaft quad + head; segment: quad
+  const vPer = sabs() === 1 ? 9 : 6;                  // arrow: shaft quad + head; segment: quad
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts.length * vPer * 3), 3));
   if (cell.glyph) { cell.group.remove(cell.glyph); cell.glyph.geometry.dispose(); }
@@ -178,7 +192,7 @@ function buildGlyphs(cell) {
 
 // Normalization: max |f| over the sphere and over one period.
 function updateNorm(cell) {
-  const mirror = st.sum && st.time && st.mirror;
+  const mirror = st.time && (st.tab === 1 || (st.sum && st.mirror));   // A, B carry independent phases
   let mx = 0;
   const upd = (ar, ai, br, bi) => {
     const v = mirror ? Math.hypot(ar, ai) + Math.hypot(br, bi) : Math.hypot(ar + br, ai + bi);
@@ -186,12 +200,14 @@ function updateNorm(cell) {
   };
   for (let i = 0; i < NV; i++) upd(cell.A[2*i], cell.A[2*i+1], cell.B[2*i], cell.B[2*i+1]);
   if (cell.gpts) for (const p of cell.gpts) upd(p.a[0], p.a[1], p.b[0], p.b[1]);
-  cell.norm = mx > 1e-12 ? 1 / mx : 0;
+  cell.norm = mx > 1e-9 ? 1 / mx : 0;
+  cell.el.parentElement.querySelector('.zero')?.remove();
+  if (!cell.norm) cell.el.insertAdjacentHTML('beforebegin', '<div class="zero">= 0<br>(vanishes)</div>');
   cell.mesh.material.uniforms.uNorm.value = cell.norm;
 }
 
 function updateGlyphs(cell, pa, pb) {
-  const s = spin(), arrow = st.sabs === 1;
+  const s = spin(), arrow = sabs() === 1;
   const pos = cell.glyph.geometry.attributes.position.array;
   const N = cell.gpts.length;
   const spacing = Math.sqrt(4 * Math.PI / N);
@@ -240,7 +256,8 @@ function rebuild() {
     add(`ℓ = ${l}`, 'rowlab');
     for (const m of mCols) {
       if (Math.abs(m) > l) { add('', 'cell'); continue; }
-      const el = add(`<div class="tag">${st.sum && m ? `ℓ${l}, ±${m}` : `ℓ${l}, ${m}`}</div><div class="view"></div>`, 'cell');
+      const pl = st.tab === 1 ? ['', ' P', ' A'][[0, 1, -1].indexOf(st.parity)] : '';
+      const el = add(`<div class="tag">${st.sum && m ? `ℓ${l}, ±${m}` : `ℓ${l}, ${m}`}${pl}</div><div class="view"></div>`, 'cell');
       cells.push(buildCell(l, m, el.querySelector('.view')));
     }
   }
@@ -313,10 +330,17 @@ $('convclose').onclick = () => $('conv').classList.remove('open');
 function syncButtons() {
   for (const b of document.querySelectorAll('button[data-k]')) b.classList.toggle('on', st[b.dataset.k] === +b.dataset.v);
   for (const b of document.querySelectorAll('button[data-k="sign"]')) b.disabled = st.sabs === 0;
+  document.body.classList.toggle('parity', st.tab === 1);
+  for (const id of ['signgrp', 'sabsgrp']) $(id).style.display = st.tab === 1 ? 'none' : '';
+  $('paritygrp').style.display = st.tab === 1 ? '' : 'none';
+  $('subtitle').textContent = st.tab === 1
+    ? 'even (polar) and odd (axial) parts of h = h₊ − i h× — drag a sphere to rotate all · wheel to zoom · drag empty space to pan'
+    : 'sYℓm(θ, φ) — drag a sphere to rotate all · wheel to zoom · drag empty space (or shift/right-drag) to pan';
+  document.title = st.tab === 1 ? 'Polar and axial tensor harmonics' : 'Spin-weighted spherical harmonics';
   for (const b of document.querySelectorAll('button[data-k="mirror"]')) b.disabled = !(st.sum && st.time);
   $('lsign').disabled = !st.sum; $('lsign').classList.toggle('on', !!st.lsign);
   $('mirrorgrp').title = st.sum ? '' : 'active only in "m + (−m)" mode';
-  for (const id of ['gdens', 'gsize']) $(id).style.opacity = st.sabs === 0 ? 0.35 : 1;
+  for (const id of ['gdens', 'gsize']) $(id).style.opacity = spin() === 0 ? 0.35 : 1;
   $('play').disabled = !st.time; $('phase').disabled = !st.time;
   $('play').textContent = st.playing ? '⏸ pause' : '▶ play';
 }
@@ -326,8 +350,9 @@ for (const b of document.querySelectorAll('button[data-k]')) {
     if (st[k] === v) return;
     st[k] = v;
     syncButtons();
-    if (k === 'mirror') cells.forEach(updateNorm);
-    else if (k === 'time') { cells.forEach(updateNorm); refreshLegend(); }
+    if (k === 'tab') location.hash = v ? 'parity' : '';
+    if (k === 'mirror' && st.tab === 0) cells.forEach(updateNorm);
+    else if (k === 'time' && st.tab === 0) { cells.forEach(updateNorm); refreshLegend(); }
     else rebuild();
     dirty = true;
   };
@@ -349,7 +374,7 @@ function refreshLegend() {
     const c = s === 0 ? rampRGB(RDBU_R, u) : rampRGB(INFERNO, MAG_LO + (1 - MAG_LO) * u);
     ctx.fillStyle = `rgb(${c.map(Math.round).join(',')})`; ctx.fillRect(i, 0, 1, cv.height);
   }
-  $('leglab').textContent = s === 0 ? 'Re f / max|f|' : '|f| / max|f|';
+  $('leglab').textContent = s === 0 ? 'Re f / max|f|' : st.tab === 1 ? '|h| / max|h|' : '|f| / max|f|';
   $('leg0').textContent = s === 0 ? '−1' : '0';
   $('leg1').textContent = '1';
 }
@@ -374,12 +399,13 @@ function render() {
   renderer.setScissor(0, 0, W, H); renderer.clear();
   const wt = st.time ? st.wt : 0;
   const pa = [Math.cos(wt), -Math.sin(wt)];                       // e^{-i w t}
-  const pb = st.sum && st.time && st.mirror ? [Math.cos(wt), Math.sin(wt)] : pa;
+  const pb = st.time && (st.tab === 1 || (st.sum && st.mirror)) ? [Math.cos(wt), Math.sin(wt)] : pa;
   $('readout').textContent = st.time ? `ωt = ${(wt / Math.PI).toFixed(2)} π` : 'static';
   const top = viewport.getBoundingClientRect().top;
   for (const c of cells) {
     const r = c.el.getBoundingClientRect();
     if (r.bottom < top || r.top > H || r.right < 0 || r.left > W) continue;
+    if (!c.norm) continue;                        // identically zero: leave the "= 0" label visible
     c.group.quaternion.copy(Q);
     const u = c.mesh.material.uniforms;
     u.uPA.value.set(pa[0], pa[1]); u.uPB.value.set(pb[0], pb[1]);
@@ -394,6 +420,7 @@ function render() {
 }
 
 // ------------------------------------------------------------------ start
+if (location.hash === '#parity') st.tab = 1;
 $('csize').value = Math.max(60, Math.min(160, Math.floor((window.innerWidth - 110) / 11.3)));
 syncButtons();
 rebuild();

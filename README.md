@@ -10,5 +10,7 @@ Live page: https://mhycheung.github.io/harmonics_visualization/
 - Drag any sphere to rotate all spheres; "lock z vertical" restricts dragging to rotation about z.
 - Scroll wheel zooms; drag empty space (or shift/right-drag) to pan.
 
+Second tab, "polar / axial" (also at `#parity`): the even-parity (polar, E-type) and odd-parity (axial, B-type) parts of the s = −2 strain h = h₊ − i h×, with the same m and time buttons. h^P_ℓm = ½[h_ℓm + (−1)^m h*_ℓ,−m], h^A_ℓm = ½[h_ℓm − (−1)^m h*_ℓ,−m].
+
 Conventions (Goldberg formula, LAL/SXS sign convention; glyph angle χ = sign(s)·arg f / |s|) are listed on the page.
-Static site: `index.html`, `app.js`, `swsh.js` (three.js from jsDelivr CDN).
+Static site: `index.html`, `app.js`, `swsh.js`, `parity.js` (three.js from jsDelivr CDN).
